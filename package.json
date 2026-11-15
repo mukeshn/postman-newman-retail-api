@@ -1,0 +1,16 @@
+{
+  "name": "postman-newman-retail-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Postman collection + Newman CI for a retail store operations API",
+  "author": "Mukesh Ningadali",
+  "license": "MIT",
+  "scripts": {
+    "sut": "node sut/server.mjs",
+    "test": "newman run collections/retail-store-ops.postman_collection.json -e environments/local.postman_environment.json -r cli,htmlextra,junit --reporter-htmlextra-export reports/index.html --reporter-junit-export reports/junit.xml --reporter-htmlextra-title \"Retail Store Ops API\""
+  },
+  "devDependencies": {
+    "newman": "^6.2.3",
+    "newman-reporter-htmlextra": "^1.23.1"
+  }
+}
