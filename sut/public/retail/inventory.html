@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Inventory | Store Ops</title><link rel="stylesheet" href="/assets/base.css"></head>
+<body>
+<header class="top"><strong>Store Ops</strong><nav class="links"><a href="/retail/inventory.html">Inventory</a> · <a href="/retail/stores.html">Store finder</a> · <a href="/retail/orders.html">Click &amp; Collect</a></nav></header>
+<main>
+  <h1>Inventory</h1>
+  <div class="row card">
+    <div><label for="store">Store</label><select id="store" data-testid="store-select"></select></div>
+    <div><label><input type="checkbox" id="low" data-testid="low-stock-only" style="width:auto"> Low stock only</label></div>
+    <div style="display:flex;gap:.5rem;align-items:end">
+      <a class="btn secondary" id="export" data-testid="export-csv" download>Export CSV</a>
+      <label class="btn secondary" style="margin:0" for="import-file">Import CSV</label>
+      <input type="file" id="import-file" accept=".csv,text/csv" data-testid="import-file" class="hidden">
+    </div>
+  </div>
+  <div role="status" class="alert success hidden" data-testid="import-result"></div>
+  <ul class="error" data-testid="import-errors"></ul>
+  <p data-testid="loading" class="hidden"><span class="spinner"></span> Loading inventory…</p>
+  <table data-testid="inventory-table"><thead><tr><th>SKU</th><th>Product</th><th>Price</th><th>On hand</th><th>Reorder point</th><th>Status</th><th>Adjust</th></tr></thead><tbody></tbody></table>
+  <p class="muted" data-testid="summary"></p>
+</main>
+<script type="module">
+  const $ = (s) => document.querySelector(s);
+  const eur = (v) => new Intl.NumberFormat(navigator.language || 'de-DE', { style: 'currency', currency: 'EUR' }).format(v);
+  const { stores } = await (await fetch('/api/retail/stores')).json();
+  $('#store').innerHTML = stores.map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+  const params = new URLSearchParams(location.search);
+  if (params.get('store')) $('#store').value = params.get('store');
+  async function load() {
+    $('[data-testid="loading"]').classList.remove('hidden');
+    $('tbody').innerHTML = '';
+    const store = $('#store').value;
+    $('#export').href = `/api/retail/inventory/export.csv?store=${store}`;
+    const d = await (await fetch(`/api/retail/inventory?store=${store}&delayMs=${params.get('delayMs') ?? 800}${$('#low').checked ? '&lowStock=true' : ''}`)).json();
+    $('[data-testid="loading"]').classList.add('hidden');
+    $('tbody').innerHTML = d.items.map((i) => `<tr data-testid="inventory-row" data-sku="${i.sku}">
+      <td>${i.sku}</td><td>${i.name}</td><td>${eur(i.price)}</td><td data-testid="on-hand">${i.onHand}</td><td>${i.reorderPoint}</td>
+      <td><span data-testid="stock-status" data-status="${i.status}" style="color:${i.status === 'OK' ? 'var(--ok)' : 'var(--err)'}">${{ OK: 'In stock', LOW: 'Low', OUT_OF_STOCK: 'Out of stock' }[i.status]}</span></td>
+      <td><button class="btn secondary" data-adjust="+1" data-sku="${i.sku}" aria-label="Receive one ${i.sku}">+1</button> <button class="btn secondary" data-adjust="-1" data-sku="${i.sku}" aria-label="Sell one ${i.sku}" ${i.onHand === 0 ? 'disabled' : ''}>−1</button></td></tr>`).join('');
+    const low = d.items.filter((i) => i.status !== 'OK').length;
+    $('[data-testid="summary"]').textContent = `${d.count} SKUs · ${low} need replenishment`;
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-adjust]'); if (!b) return;
+    const delta = Number(b.dataset.adjust);
+    await fetch('/api/retail/inventory/adjust', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId: $('#store').value, sku: b.dataset.sku, delta, reason: delta > 0 ? 'RECEIPT' : 'SALE' }) });
+    load();
+  });
+  $('#import-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const csv = await file.text();
+    const r = await (await fetch('/api/retail/inventory/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ csv }) })).json();
+    const box = $('[data-testid="import-result"]');
+    box.textContent = r.error ? `Import failed: expected header "${r.expected}"` : `Imported ${file.name}: ${r.updated} row(s) updated, ${r.rejected.length} rejected.`;
+    box.className = r.error ? 'alert error' : 'alert success';
+    $('[data-testid="import-errors"]').innerHTML = (r.rejected || []).map((x) => `<li data-testid="import-error">Line ${x.line}: ${x.reason}</li>`).join('');
+    e.target.value = '';
+    load();
+  });
+  $('#store').addEventListener('change', load);
+  $('#low').addEventListener('change', load);
+  load();
+</script>
+</body>
+</html>

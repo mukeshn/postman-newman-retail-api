@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Click &amp; Collect | Store Ops</title><link rel="stylesheet" href="/assets/base.css"></head>
+<body>
+<header class="top"><strong>Store Ops</strong><nav class="links"><a href="/retail/inventory.html">Inventory</a> · <a href="/retail/stores.html">Store finder</a> · <a href="/retail/orders.html">Click &amp; Collect</a></nav></header>
+<main>
+  <h1>Click &amp; Collect pickup</h1>
+  <form class="card row" id="lookup" novalidate>
+    <div><label for="order-id">Order number</label><input id="order-id" data-testid="order-id" placeholder="CC-00001-123"></div>
+    <div style="display:flex;align-items:end"><button class="btn" data-testid="find-order">Find order</button></div>
+  </form>
+  <p class="alert error hidden" role="alert" data-testid="lookup-error"></p>
+  <section class="card hidden" data-testid="order-panel">
+    <h2>Order <span data-testid="panel-order-id"></span></h2>
+    <p>Customer: <span data-testid="panel-customer"></span> · Store: <span data-testid="panel-store"></span></p>
+    <p>Status: <strong data-testid="panel-status"></strong></p>
+    <ul data-testid="panel-lines"></ul>
+    <form id="pickup" class="row" novalidate>
+      <div><label for="pickup-code">Pickup code</label><input id="pickup-code" inputmode="numeric" data-testid="pickup-code"></div>
+      <div style="display:flex;align-items:end"><button class="btn" data-testid="confirm-pickup">Hand over</button></div>
+    </form>
+    <p role="status" data-testid="pickup-result"></p>
+  </section>
+</main>
+<script type="module">
+  const $ = (s) => document.querySelector(s);
+  let current;
+  const show = (o) => {
+    current = o;
+    $('[data-testid="order-panel"]').classList.remove('hidden');
+    $('[data-testid="panel-order-id"]').textContent = o.id;
+    $('[data-testid="panel-customer"]').textContent = o.customerName;
+    $('[data-testid="panel-store"]').textContent = o.storeName;
+    $('[data-testid="panel-status"]').textContent = o.status;
+    $('[data-testid="panel-lines"]').innerHTML = o.lines.map((l) => `<li data-testid="panel-line">${l.quantity} × ${l.sku}</li>`).join('');
+    $('#pickup').classList.toggle('hidden', o.status !== 'RESERVED');
+  };
+  $('#lookup').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const res = await fetch('/api/retail/click-collect/' + encodeURIComponent($('#order-id').value.trim()));
+    const err = $('[data-testid="lookup-error"]');
+    if (!res.ok) { err.textContent = 'No order found with that number.'; err.classList.remove('hidden'); $('[data-testid="order-panel"]').classList.add('hidden'); return; }
+    err.classList.add('hidden');
+    show(await res.json());
+  });
+  $('#pickup').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const res = await fetch(`/api/retail/click-collect/${current.id}/pickup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pickupCode: $('#pickup-code').value.trim() }) });
+    const body = await res.json();
+    $('[data-testid="pickup-result"]').textContent = res.ok ? 'Order handed over to customer.' : body.error === 'WRONG_PICKUP_CODE' ? 'Pickup code does not match.' : 'Order cannot be handed over.';
+    if (res.ok) show(body);
+  });
+  const pre = new URLSearchParams(location.search).get('order');
+  if (pre) { $('#order-id').value = pre; $('#lookup').requestSubmit(); }
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Store finder | Store Ops</title><link rel="stylesheet" href="/assets/base.css"></head>
+<body>
+<header class="top"><strong>Store Ops</strong><nav class="links"><a href="/retail/inventory.html">Inventory</a> · <a href="/retail/stores.html">Store finder</a> · <a href="/retail/orders.html">Click &amp; Collect</a></nav></header>
+<main>
+  <h1>Find a store</h1>
+  <div class="card row">
+    <div><label for="city">City</label><select id="city" data-testid="city"><option value="">All cities</option><option>Augsburg</option><option>München</option><option>Stuttgart</option><option>Berlin</option><option>Hamburg</option></select></div>
+    <div style="display:flex;align-items:end"><button class="btn" data-testid="use-location">Use my location</button></div>
+  </div>
+  <p class="alert error hidden" role="alert" data-testid="geo-error"></p>
+  <p class="muted" data-testid="local-time"></p>
+  <ol data-testid="store-list"></ol>
+</main>
+<script type="module">
+  const $ = (s) => document.querySelector(s);
+  const fmt = new Intl.DateTimeFormat(navigator.language, { weekday: 'long', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+  $('[data-testid="local-time"]').textContent = `Your local time: ${fmt.format(new Date())}`;
+  const nf = new Intl.NumberFormat(navigator.language, { maximumFractionDigits: 1 });
+  const isOpen = (s) => { const now = new Date(); const hm = now.getHours() * 60 + now.getMinutes(); const [oh, om] = s.open.split(':').map(Number); const [ch, cm] = s.close.split(':').map(Number); return now.getDay() !== 0 && hm >= oh * 60 + om && hm < ch * 60 + cm; };
+  async function render(qs = '') {
+    const { stores } = await (await fetch('/api/retail/stores' + qs)).json();
+    $('[data-testid="store-list"]').innerHTML = stores.map((s) => `<li class="card" data-testid="store-item" data-store-id="${s.id}" style="margin-bottom:.5rem">
+      <strong data-testid="store-name">${s.name}</strong> · ${s.city}
+      ${s.distanceKm !== undefined ? `<span class="muted" data-testid="store-distance" data-km="${s.distanceKm}"> ${nf.format(s.distanceKm)} km</span>` : ''}
+      <div class="muted">${s.open} - ${s.close} · <span data-testid="open-state">${isOpen(s) ? 'Open now' : 'Closed'}</span></div>
+      <a href="/retail/inventory.html?store=${s.id}">Check stock</a></li>`).join('');
+  }
+  $('#city').addEventListener('change', () => render($('#city').value ? `?city=${encodeURIComponent($('#city').value)}` : ''));
+  $('[data-testid="use-location"]').addEventListener('click', () => {
+    $('[data-testid="geo-error"]').classList.add('hidden');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => render(`?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`),
+      () => { $('[data-testid="geo-error"]').textContent = 'Location access was denied. Please choose a city instead.'; $('[data-testid="geo-error"]').classList.remove('hidden'); },
+      { timeout: 5000 });
+  });
+  render();
+</script>
+</body>
+</html>
