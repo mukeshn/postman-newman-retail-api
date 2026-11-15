@@ -1,0 +1,36 @@
+name: Newman API tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  newman:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start system under test
+        run: |
+          node sut/server.mjs > sut.log 2>&1 &
+          npx --yes wait-on@8 http://localhost:4173/health
+      - run: npm test
+      - uses: actions/upload-pages-artifact@v4
+        if: always() && github.ref == 'refs/heads/main'
+        with:
+          path: reports
+      - id: deployment
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
