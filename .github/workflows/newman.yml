@@ -33,4 +33,4 @@ jobs:
           path: reports
       - id: deployment
         if: always() && github.ref == 'refs/heads/main'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
