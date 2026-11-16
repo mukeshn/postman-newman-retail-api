@@ -27,7 +27,7 @@ jobs:
           node sut/server.mjs > sut.log 2>&1 &
           npx --yes wait-on@8 http://localhost:4173/health
       - run: npm test
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         if: always() && github.ref == 'refs/heads/main'
         with:
           path: reports
